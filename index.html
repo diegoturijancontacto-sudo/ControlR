@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { text-align: center; font-family: sans-serif; padding: 20px; }
+        #cube { width: 100px; height: 100px; background: red; margin: 20px auto; transition: transform 0.1s; }
+        #reader { width: 300px; margin: auto; }
+    </style>
+</head>
+<body>
+    <h3>Control de Cubo P2P</h3>
+    
+    <div id="cube"></div>
+    <div id="qr-code"></div>
+    <p id="mi-id"></p>
+
+    <button onclick="iniciarEscaneo()">Escanear QR del otro</button>
+    <div id="reader"></div>
+
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <script>
+        const peer = new Peer();
+        const cube = document.getElementById('cube');
+
+        // Al abrir, generar QR con nuestro propio ID
+        peer.on('open', (id) => {
+            document.getElementById('mi-id').innerText = "Mi ID: " + id;
+            new QRCode(document.getElementById("qr-code"), id);
+        });
+
+        // Lógica de Recepción (Dispositivo B)
+        peer.on('connection', (conn) => {
+            conn.on('data', (data) => {
+                cube.style.transform = `rotateX(${data.beta}deg) rotateY(${data.gamma}deg)`;
+            });
+        });
+
+        // Lógica de Escaneo (Dispositivo A)
+        function iniciarEscaneo() {
+            const html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: 250 },
+                (decodedText) => {
+                    html5QrCode.stop();
+                    conectar(decodedText);
+                }
+            );
+        }
+
+        function conectar(idDestino) {
+            const conn = peer.connect(idDestino);
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(res => {
+                    if (res == 'granted') enviarSensores(conn);
+                });
+            } else { enviarSensores(conn); }
+        }
+
+        function enviarSensores(conn) {
+            window.addEventListener('deviceorientation', (e) => {
+                if (conn.open) conn.send({ beta: e.beta, gamma: e.gamma });
+            });
+        }
+    </script>
+</body>
+</html>
